@@ -21,6 +21,7 @@ from werkzeug.datastructures import WWWAuthenticate, MultiDict
 from werkzeug.http import http_date
 from werkzeug.wrappers import BaseResponse
 from six.moves import range as xrange
+from ipwhois import IPWhois
 
 from . import filters
 from .helpers import get_headers, status_code, get_dict, get_request_range, check_basic_auth, check_digest_auth, \
@@ -735,6 +736,17 @@ def xml():
 def whoisquery(domain):
     data = whois.whois(domain)
     response = make_response(str(data))
+    response.headers["Content-Type"] = "application/json"
+    return response
+
+
+@app.route('/ipwhois/<ip>')
+def ipwhoisquery(ip):
+    try:
+        data = IPWhois(ip)
+    except ValueError:
+        return "Not a valid ip address"
+    response = make_response(jsonify(data.lookup_whois()))
     response.headers["Content-Type"] = "application/json"
     return response
 
