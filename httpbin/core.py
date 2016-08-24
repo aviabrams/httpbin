@@ -14,6 +14,7 @@ import random
 import time
 import uuid
 import argparse
+import whois
 
 from flask import Flask, Response, request, render_template, redirect, jsonify as flask_jsonify, make_response, url_for
 from werkzeug.datastructures import WWWAuthenticate, MultiDict
@@ -22,7 +23,8 @@ from werkzeug.wrappers import BaseResponse
 from six.moves import range as xrange
 
 from . import filters
-from .helpers import get_headers, status_code, get_dict, get_request_range, check_basic_auth, check_digest_auth, secure_cookie, H, ROBOT_TXT, ANGRY_ASCII
+from .helpers import get_headers, status_code, get_dict, get_request_range, check_basic_auth, check_digest_auth, \
+    secure_cookie, H, ROBOT_TXT, ANGRY_ASCII
 from .utils import weighted_choice
 from .structures import CaseInsensitiveDict
 
@@ -37,11 +39,13 @@ ENV_COOKIES = (
     '__utmb'
 )
 
+
 def jsonify(*args, **kwargs):
     response = flask_jsonify(*args, **kwargs)
     if not response.data.endswith(b'\n'):
         response.data += b'\n'
     return response
+
 
 # Prevent WSGI from correcting the casing of the Location header
 BaseResponse.autocorrect_location_header = False
@@ -59,6 +63,7 @@ if os.environ.get("BUGSNAG_API_KEY") is not None:
     try:
         import bugsnag
         import bugsnag.flask
+
         release_stage = os.environ.get("BUGSNAG_RELEASE_STAGE") or "production"
         bugsnag.configure(api_key=os.environ.get("BUGSNAG_API_KEY"),
                           project_root=os.path.dirname(os.path.abspath(__file__)),
@@ -67,6 +72,7 @@ if os.environ.get("BUGSNAG_API_KEY") is not None:
         bugsnag.flask.handle_exceptions(app)
     except:
         app.logger.warning("Unable to initialize Bugsnag exception handling.")
+
 
 # -----------
 # Middlewares
@@ -286,7 +292,7 @@ def stream_n_messages(n):
 
     return Response(generate_stream(), headers={
         "Content-Type": "application/json",
-        })
+    })
 
 
 @app.route('/status/<codes>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'TRACE'])
@@ -415,6 +421,7 @@ def hidden_basic_auth(user='user', passwd='passwd'):
 def digest_auth_md5(qop=None, user='user', passwd='passwd'):
     return digest_auth(qop, user, passwd, "MD5")
 
+
 @app.route('/digest-auth/<qop>/<user>/<passwd>/<algorithm>')
 def digest_auth(qop=None, user='user', passwd='passwd', algorithm='MD5'):
     """Prompts the user for authorization using HTTP Digest auth"""
@@ -422,9 +429,9 @@ def digest_auth(qop=None, user='user', passwd='passwd', algorithm='MD5'):
         algorithm = 'MD5'
     if qop not in ('auth', 'auth-int'):
         qop = None
-    if 'Authorization' not in request.headers or  \
-                       not check_digest_auth(user, passwd) or \
-                       'Cookie' not in request.headers:
+    if 'Authorization' not in request.headers or \
+            not check_digest_auth(user, passwd) or \
+                    'Cookie' not in request.headers:
         response = app.make_response('')
         response.status_code = 401
 
@@ -433,7 +440,7 @@ def digest_auth(qop=None, user='user', passwd='passwd', algorithm='MD5'):
         # encode it back to ascii.  Also, RFC2617 says about nonces: "The
         # contents of the nonce are implementation dependent"
         nonce = H(b''.join([
-            getattr(request,'remote_addr',u'').encode('ascii'),
+            getattr(request, 'remote_addr', u'').encode('ascii'),
             b':',
             str(time.time()).encode('ascii'),
             b':',
@@ -443,7 +450,7 @@ def digest_auth(qop=None, user='user', passwd='passwd', algorithm='MD5'):
 
         auth = WWWAuthenticate("digest")
         auth.set_digest('me@kennethreitz.com', nonce, opaque=opaque,
-                        qop=('auth', 'auth-int') if qop is None else (qop, ), algorithm=algorithm)
+                        qop=('auth', 'auth-int') if qop is None else (qop,), algorithm=algorithm)
         response.headers['WWW-Authenticate'] = auth.to_header()
         response.headers['Set-Cookie'] = 'fake=fake_value'
         return response
@@ -466,7 +473,7 @@ def drip():
     """Drips data over a duration after an optional initial delay."""
     args = CaseInsensitiveDict(request.args.items())
     duration = float(args.get('duration', 2))
-    numbytes = min(int(args.get('numbytes', 10)),(10 * 1024 * 1024)) # set 10MB limit
+    numbytes = min(int(args.get('numbytes', 10)), (10 * 1024 * 1024))  # set 10MB limit
     code = int(args.get('code', 200))
     pause = duration / numbytes
 
@@ -488,10 +495,11 @@ def drip():
 
     return response
 
+
 @app.route('/base64/<value>')
 def decode_base64(value):
     """Decodes base64url-encoded string"""
-    encoded = value.encode('utf-8') # base64 expects binary string as input
+    encoded = value.encode('utf-8')  # base64 expects binary string as input
     return base64.urlsafe_b64decode(encoded).decode('utf-8')
 
 
@@ -525,7 +533,7 @@ def encoding():
 @app.route('/bytes/<int:n>')
 def random_bytes(n):
     """Returns n random bytes generated with given seed."""
-    n = min(n, 100 * 1024) # set 100KB limit
+    n = min(n, 100 * 1024)  # set 100KB limit
 
     params = CaseInsensitiveDict(request.args.items())
     if 'seed' in params:
@@ -542,7 +550,7 @@ def random_bytes(n):
 @app.route('/stream-bytes/<int:n>')
 def stream_random_bytes(n):
     """Streams n random bytes generated with given seed, at given chunk size per packet."""
-    n = min(n, 100 * 1024) # set 100KB limit
+    n = min(n, 100 * 1024)  # set 100KB limit
 
     params = CaseInsensitiveDict(request.args.items())
     if 'seed' in params:
@@ -559,15 +567,16 @@ def stream_random_bytes(n):
         for i in xrange(n):
             chunks.append(random.randint(0, 255))
             if len(chunks) == chunk_size:
-                yield(bytes(chunks))
+                yield (bytes(chunks))
                 chunks = bytearray()
 
         if chunks:
-            yield(bytes(chunks))
+            yield (bytes(chunks))
 
     headers = {'Content-Type': 'application/octet-stream'}
 
     return Response(generate_bytes(), headers=headers)
+
 
 @app.route('/range/<int:numbytes>')
 def range_request(numbytes):
@@ -575,9 +584,9 @@ def range_request(numbytes):
 
     if numbytes <= 0 or numbytes > (100 * 1024):
         response = Response(headers={
-            'ETag' : 'range%d' % numbytes,
-            'Accept-Ranges' : 'bytes'
-            })
+            'ETag': 'range%d' % numbytes,
+            'Accept-Ranges': 'bytes'
+        })
         response.status_code = 404
         response.data = 'number of bytes must be in the range (0, 10240]'
         return response
@@ -594,12 +603,13 @@ def range_request(numbytes):
     request_headers = get_headers()
     first_byte_pos, last_byte_pos = get_request_range(request_headers, numbytes)
 
-    if first_byte_pos > last_byte_pos or first_byte_pos not in xrange(0, numbytes) or last_byte_pos not in xrange(0, numbytes):
+    if first_byte_pos > last_byte_pos or first_byte_pos not in xrange(0, numbytes) or last_byte_pos not in xrange(0,
+                                                                                                                  numbytes):
         response = Response(headers={
-            'ETag' : 'range%d' % numbytes,
-            'Accept-Ranges' : 'bytes',
-            'Content-Range' : 'bytes */%d' % numbytes
-            })
+            'ETag': 'range%d' % numbytes,
+            'Accept-Ranges': 'bytes',
+            'Content-Range': 'bytes */%d' % numbytes
+        })
         response.status_code = 416
         return response
 
@@ -612,20 +622,20 @@ def range_request(numbytes):
             # to use a predictable data generation function
             chunks.append(ord('a') + (i % 26))
             if len(chunks) == chunk_size:
-                yield(bytes(chunks))
+                yield (bytes(chunks))
                 time.sleep(pause_per_byte * chunk_size)
                 chunks = bytearray()
 
         if chunks:
             time.sleep(pause_per_byte * len(chunks))
-            yield(bytes(chunks))
+            yield (bytes(chunks))
 
     content_range = 'bytes %d-%d/%d' % (first_byte_pos, last_byte_pos, numbytes)
     response_headers = {
         'Content-Type': 'application/octet-stream',
-        'ETag' : 'range%d' % numbytes,
-        'Accept-Ranges' : 'bytes',
-        'Content-Range' : content_range }
+        'ETag': 'range%d' % numbytes,
+        'Accept-Ranges': 'bytes',
+        'Content-Range': content_range}
 
     response = Response(generate_bytes(), headers=response_headers)
 
@@ -636,10 +646,11 @@ def range_request(numbytes):
 
     return response
 
+
 @app.route('/links/<int:n>/<int:offset>')
 def link_page(n, offset):
     """Generate a page containing n links to other pages which do the same."""
-    n = min(max(1, n), 200) # limit to between 1 and 200 links
+    n = min(max(1, n), 200)  # limit to between 1 and 200 links
 
     link = "<a href='{0}'>{1}</a> "
 
@@ -666,7 +677,7 @@ def image():
 
     headers = get_headers()
     if 'accept' not in headers:
-        return image_png() # Default media type to png
+        return image_png()  # Default media type to png
 
     accept = headers['accept'].lower()
 
@@ -679,7 +690,7 @@ def image():
     elif 'image/png' in accept or 'image/*' in accept:
         return image_png()
     else:
-        return status_code(406) # Unsupported media type
+        return status_code(406)  # Unsupported media type
 
 
 @app.route('/image/png')
@@ -717,6 +728,14 @@ def resource(filename):
 def xml():
     response = make_response(render_template("sample.xml"))
     response.headers["Content-Type"] = "application/xml"
+    return response
+
+
+@app.route("/whois/<domain>")
+def whoisquery(domain):
+    data = whois.whois(domain)
+    response = make_response(str(data))
+    response.headers["Content-Type"] = "application/json"
     return response
 
 
