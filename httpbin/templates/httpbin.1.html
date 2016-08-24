@@ -4,6 +4,9 @@
     <ul>
         <li><a href="{{ url_for('view_landing_page') }}" data-bare-link="true"><code>/</code></a> This page.</li>
         <li><a href="{{ url_for('view_origin') }}" data-bare-link="true"><code>/ip</code></a> Returns Origin IP.</li>
+        <li><a href="{{ url_for('whoisquery', domain='google.com') }}" data-bare-link="true"><code>/whois</code></a> Whois.
+        </li>
+        <li><a href="{{ url_for('ipwhoisquery',ip='8.8.8.8') }}" data-bare-link="true"><code>/ipwhois</code></a> Ip Whois.</li>
         <li><a href="{{ url_for('view_user_agent') }}" data-bare-link="true"><code>/user-agent</code></a> Returns
             user-agent.
         </li>
